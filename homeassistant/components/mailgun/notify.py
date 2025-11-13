@@ -23,7 +23,7 @@ from homeassistant.const import CONF_API_KEY, CONF_DOMAIN, CONF_RECIPIENT, CONF_
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from . import CONF_SANDBOX, DOMAIN
+from . import CONF_EU_DOMAIN, CONF_SANDBOX, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +50,7 @@ def get_service(
         data.get(CONF_API_KEY),
         config.get(CONF_SENDER),
         config.get(CONF_RECIPIENT),
+        data.get(CONF_EU_DOMAIN, False),
     )
     if mailgun_service.connection_is_valid():
         return mailgun_service
@@ -60,7 +61,7 @@ def get_service(
 class MailgunNotificationService(BaseNotificationService):
     """Implement a notification service for the Mailgun mail service."""
 
-    def __init__(self, domain, sandbox, api_key, sender, recipient):
+    def __init__(self, domain, sandbox, api_key, sender, recipient, eu_domain):
         """Initialize the service."""
         self._client = None  # Mailgun API client
         self._domain = domain
@@ -68,11 +69,14 @@ class MailgunNotificationService(BaseNotificationService):
         self._api_key = api_key
         self._sender = sender
         self._recipient = recipient
+        self._eu_domain = eu_domain
 
     def initialize_client(self):
         """Initialize the connection to Mailgun."""
 
-        self._client = Client(self._api_key, self._domain, self._sandbox)
+        self._client = Client(
+            self._api_key, self._domain, self._sandbox, self._eu_domain
+        )
         _LOGGER.debug("Mailgun domain: %s", self._client.domain)
         self._domain = self._client.domain
         if not self._sender:
