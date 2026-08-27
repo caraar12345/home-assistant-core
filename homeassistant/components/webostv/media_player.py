@@ -207,6 +207,9 @@ class LgWebOSMediaPlayerEntity(WebOsTvEntity, RestoreEntity, MediaPlayerEntity):
         for app in tv_state.apps.values():
             if app["id"] == LIVE_TV_APP_ID:
                 found_live_tv = True
+            if app["id"] in tv_state.inputs:
+                # handled below using the input's renameable label instead
+                continue
             if app["id"] == tv_state.current_app_id:
                 self._current_source = app["title"]
                 self._source_list[app["title"]] = app

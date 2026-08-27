@@ -1,5 +1,8 @@
 """Helper functions for LG webOS TV."""
 
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
 from aiowebostv import WebOsTvState
 
 from homeassistant.core import HomeAssistant, callback
@@ -7,8 +10,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .const import CONF_SOURCES, DOMAIN, LIVE_TV_APP_ID
-from .coordinator import WebOsTvConfigEntry
+from .const import CONF_SOURCES, DOMAIN, LIVE_TV_APP_ID, LOGGER
+
+if TYPE_CHECKING:
+    from .coordinator import WebOsTvConfigEntry
 
 
 @callback
@@ -69,6 +74,25 @@ def get_sources(tv_state: WebOsTvState) -> dict[str, str]:
     return sources
 
 
+def sources_to_ids(
+    available_sources: dict[str, str], sources: Iterable[str]
+) -> list[str]:
+    """Translate configured sources (ids or legacy labels) to their current id.
+
+    A source already matching a current id is kept as-is. A source matching a
+    current label is translated to that id. Anything that matches neither (the
+    source may have been renamed away, or the TV state may be incomplete, for
+    example if the TV was off) is left untouched.
+    """
+    label_to_id = {label: source_id for source_id, label in available_sources.items()}
+    return list(
+        dict.fromkeys(
+            source if source in available_sources else label_to_id.get(source, source)
+            for source in sources
+        )
+    )
+
+
 @callback
 def async_migrate_sources_option(
     hass: HomeAssistant, entry: WebOsTvConfigEntry, tv_state: WebOsTvState
@@ -76,23 +100,21 @@ def async_migrate_sources_option(
     """Rewrite configured sources that still match a current label to their id.
 
     Older versions matched a configured source by its display label, which stops
-    working once that source is renamed on the TV. Only entries that still match
-    a current label are rewritten; anything else is left untouched, since the TV
-    state may be incomplete (for example, the TV was off during setup).
+    working once that source is renamed on the TV.
     """
     configured_sources = entry.options.get(CONF_SOURCES)
     if not configured_sources:
         return
 
-    label_to_id = {
-        label: source_id for source_id, label in get_sources(tv_state).items()
-    }
-
-    migrated_sources = list(
-        dict.fromkeys(label_to_id.get(source, source) for source in configured_sources)
-    )
+    migrated_sources = sources_to_ids(get_sources(tv_state), configured_sources)
 
     if migrated_sources != configured_sources:
+        LOGGER.debug(
+            "Migrating sources option for %s from %s to %s",
+            entry.title,
+            configured_sources,
+            migrated_sources,
+        )
         hass.config_entries.async_update_entry(
             entry, options={**entry.options, CONF_SOURCES: migrated_sources}
         )

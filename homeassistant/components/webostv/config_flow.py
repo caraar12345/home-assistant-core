@@ -24,7 +24,7 @@ from homeassistant.helpers.service_info.ssdp import (
 
 from . import WebOsTvConfigEntry
 from .const import CONF_SOURCES, DEFAULT_NAME, DOMAIN, WEBOSTV_EXCEPTIONS
-from .helpers import get_sources
+from .helpers import get_sources, sources_to_ids
 
 DATA_SCHEMA = vol.Schema(
     {
@@ -230,7 +230,8 @@ class OptionsFlowHandler(OptionsFlowWithReload):
             errors["base"] = "cannot_connect"
 
         option_sources = self.config_entry.options.get(CONF_SOURCES, [])
-        sources = [s for s in option_sources if s in sources_map]
+        translated_sources = sources_to_ids(sources_map, option_sources)
+        sources = [s for s in translated_sources if s in sources_map]
         if not sources:
             sources = list(sources_map)
 

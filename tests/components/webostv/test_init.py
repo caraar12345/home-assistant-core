@@ -1,5 +1,7 @@
 """The tests for the LG webOS TV platform."""
 
+from unittest.mock import MagicMock, patch
+
 from aiowebostv import WebOsTvPairError
 
 from homeassistant.components.media_player import ATTR_INPUT_SOURCE_LIST
@@ -12,7 +14,7 @@ from . import setup_webostv
 from .const import ENTITY_ID
 
 
-async def test_reauth_setup_entry(hass: HomeAssistant, client) -> None:
+async def test_reauth_setup_entry(hass: HomeAssistant, client: MagicMock) -> None:
     """Test reauth flow triggered by setup entry."""
     client.is_connected.return_value = False
     client.connect.side_effect = WebOsTvPairError
@@ -32,7 +34,7 @@ async def test_reauth_setup_entry(hass: HomeAssistant, client) -> None:
     assert flow["context"].get("entry_id") == entry.entry_id
 
 
-async def test_key_update_setup_entry(hass: HomeAssistant, client) -> None:
+async def test_key_update_setup_entry(hass: HomeAssistant, client: MagicMock) -> None:
     """Test key update from setup entry."""
     client.is_connected.return_value = False
     client.client_key = "new_key"
@@ -42,7 +44,7 @@ async def test_key_update_setup_entry(hass: HomeAssistant, client) -> None:
     assert entry.data[CONF_CLIENT_SECRET] == "new_key"
 
 
-async def test_update_options(hass: HomeAssistant, client) -> None:
+async def test_update_options(hass: HomeAssistant, client: MagicMock) -> None:
     """Test update options triggers reload."""
     config_entry = await setup_webostv(hass)
 
@@ -64,7 +66,7 @@ async def test_update_options(hass: HomeAssistant, client) -> None:
 
 
 async def test_source_filtered_by_id_survives_rename(
-    hass: HomeAssistant, client
+    hass: HomeAssistant, client: MagicMock
 ) -> None:
     """Test a source selected by its stable id is kept after being renamed on the TV."""
     config_entry = await setup_webostv(hass)
@@ -90,7 +92,9 @@ async def test_source_filtered_by_id_survives_rename(
     assert sources == ["AVR", "Live TV"]
 
 
-async def test_source_options_migrated_to_id(hass: HomeAssistant, client) -> None:
+async def test_source_options_migrated_to_id(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
     """Test a source configured by its label is silently migrated to its id."""
     config_entry = await setup_webostv(hass)
 
@@ -103,15 +107,64 @@ async def test_source_options_migrated_to_id(hass: HomeAssistant, client) -> Non
     sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
     assert sources == ["Input01", "Live TV"]
 
-    # migrating an already-migrated option is a no-op
-    hass.config_entries.async_update_entry(config_entry, options=config_entry.options)
-    await hass.config_entries.async_reload(config_entry.entry_id)
-    await hass.async_block_till_done()
+    # migrating an already-migrated option doesn't write the entry again
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_update_entry",
+        wraps=hass.config_entries.async_update_entry,
+    ) as mock_update_entry:
+        await hass.config_entries.async_reload(config_entry.entry_id)
+        await hass.async_block_till_done()
 
+    mock_update_entry.assert_not_called()
     assert config_entry.options[CONF_SOURCES] == ["app0"]
 
 
-async def test_unmatched_source_option_preserved(hass: HomeAssistant, client) -> None:
+async def test_app_source_migrated_to_id(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
+    """Test an app (not input) source configured by its title is migrated to its id."""
+    client.tv_state.apps = {
+        **client.tv_state.apps,
+        "netflix": {"title": "Netflix", "id": "netflix"},
+    }
+    config_entry = await setup_webostv(hass)
+
+    new_options = {**config_entry.options, CONF_SOURCES: ["Netflix"]}
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.options[CONF_SOURCES] == ["netflix"]
+
+
+async def test_app_shadowed_by_input_not_duplicated(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
+    """Test a source listed as both an app and an input is only shown once."""
+    config_entry = await setup_webostv(hass)
+
+    new_options = {**config_entry.options, CONF_SOURCES: ["app0"]}
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+
+    # real webOS TVs list HDMI-style inputs both as an app launch point and as
+    # an input, sharing the same id; the input's (renameable) label should win
+    client.tv_state.apps = {
+        **client.tv_state.apps,
+        "app0": {"title": "HDMI1", "id": "app0"},
+    }
+    client.tv_state.inputs = {
+        "app0": {"label": "Input01", "id": "app0", "appId": "app0"}
+    }
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
+    assert sources == ["Input01", "Live TV"]
+
+
+async def test_unmatched_source_option_preserved(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
     """Test a source that matches nothing right now is left untouched, not dropped."""
     config_entry = await setup_webostv(hass)
 
@@ -128,7 +181,7 @@ async def test_unmatched_source_option_preserved(hass: HomeAssistant, client) ->
 
 
 async def test_source_options_untouched_when_tv_state_empty(
-    hass: HomeAssistant, client
+    hass: HomeAssistant, client: MagicMock
 ) -> None:
     """Test sources aren't dropped if the TV reports no apps or inputs on setup."""
     config_entry = await setup_webostv(hass)
@@ -145,14 +198,16 @@ async def test_source_options_untouched_when_tv_state_empty(
     assert config_entry.options[CONF_SOURCES] == ["app0", "app1"]
 
 
-async def test_source_option_untouched_when_unset(hass: HomeAssistant, client) -> None:
+async def test_source_option_untouched_when_unset(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
     """Test setup doesn't add a sources option when none is configured."""
     config_entry = await setup_webostv(hass)
 
     assert CONF_SOURCES not in config_entry.options
 
 
-async def test_disconnect_on_stop(hass: HomeAssistant, client) -> None:
+async def test_disconnect_on_stop(hass: HomeAssistant, client: MagicMock) -> None:
     """Test we disconnect the client and clear callbacks when Home Assistants stops."""
     config_entry = await setup_webostv(hass)
 
