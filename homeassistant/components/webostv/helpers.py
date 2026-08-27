@@ -7,7 +7,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .const import DOMAIN, LIVE_TV_APP_ID
+from .const import CONF_SOURCES, DOMAIN, LIVE_TV_APP_ID
+from .coordinator import WebOsTvConfigEntry
 
 
 @callback
@@ -66,3 +67,32 @@ def get_sources(tv_state: WebOsTvState) -> dict[str, str]:
         sources[LIVE_TV_APP_ID] = "Live TV"
 
     return sources
+
+
+@callback
+def async_migrate_sources_option(
+    hass: HomeAssistant, entry: WebOsTvConfigEntry, tv_state: WebOsTvState
+) -> None:
+    """Rewrite configured sources that still match a current label to their id.
+
+    Older versions matched a configured source by its display label, which stops
+    working once that source is renamed on the TV. Only entries that still match
+    a current label are rewritten; anything else is left untouched, since the TV
+    state may be incomplete (for example, the TV was off during setup).
+    """
+    configured_sources = entry.options.get(CONF_SOURCES)
+    if not configured_sources:
+        return
+
+    label_to_id = {
+        label: source_id for source_id, label in get_sources(tv_state).items()
+    }
+
+    migrated_sources = list(
+        dict.fromkeys(label_to_id.get(source, source) for source in configured_sources)
+    )
+
+    if migrated_sources != configured_sources:
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_SOURCES: migrated_sources}
+        )

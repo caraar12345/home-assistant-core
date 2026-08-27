@@ -90,6 +90,68 @@ async def test_source_filtered_by_id_survives_rename(
     assert sources == ["AVR", "Live TV"]
 
 
+async def test_source_options_migrated_to_id(hass: HomeAssistant, client) -> None:
+    """Test a source configured by its label is silently migrated to its id."""
+    config_entry = await setup_webostv(hass)
+
+    new_options = {**config_entry.options, CONF_SOURCES: ["Input01"]}
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.options[CONF_SOURCES] == ["app0"]
+    sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
+    assert sources == ["Input01", "Live TV"]
+
+    # migrating an already-migrated option is a no-op
+    hass.config_entries.async_update_entry(config_entry, options=config_entry.options)
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.options[CONF_SOURCES] == ["app0"]
+
+
+async def test_unmatched_source_option_preserved(hass: HomeAssistant, client) -> None:
+    """Test a source that matches nothing right now is left untouched, not dropped."""
+    config_entry = await setup_webostv(hass)
+
+    # "AVR" doesn't match any known source or label
+    new_options = {**config_entry.options, CONF_SOURCES: ["Input02", "AVR"]}
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.options[CONF_SOURCES] == ["app1", "AVR"]
+
+    sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
+    assert sources == ["Input02", "Live TV"]
+
+
+async def test_source_options_untouched_when_tv_state_empty(
+    hass: HomeAssistant, client
+) -> None:
+    """Test sources aren't dropped if the TV reports no apps or inputs on setup."""
+    config_entry = await setup_webostv(hass)
+
+    new_options = {**config_entry.options, CONF_SOURCES: ["app0", "app1"]}
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+
+    # simulate the TV being off/unreachable, e.g. right after a HA restart
+    client.tv_state.apps = {}
+    client.tv_state.inputs = {}
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.options[CONF_SOURCES] == ["app0", "app1"]
+
+
+async def test_source_option_untouched_when_unset(hass: HomeAssistant, client) -> None:
+    """Test setup doesn't add a sources option when none is configured."""
+    config_entry = await setup_webostv(hass)
+
+    assert CONF_SOURCES not in config_entry.options
+
+
 async def test_disconnect_on_stop(hass: HomeAssistant, client) -> None:
     """Test we disconnect the client and clear callbacks when Home Assistants stops."""
     config_entry = await setup_webostv(hass)
