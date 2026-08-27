@@ -219,27 +219,27 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         if user_input is not None:
             options_input = {CONF_SOURCES: user_input[CONF_SOURCES]}
             return self.async_create_entry(title="", data=options_input)
-        # Get sources
-        sources_list = []
+        # Get sources, mapped from their stable id to their current display label
+        sources_map: dict[str, str] = {}
         try:
             client = await async_control_connect(self.hass, self.host, self.key)
-            sources_list = get_sources(client.tv_state)
+            sources_map = get_sources(client.tv_state)
         except WebOsTvPairError:
             errors["base"] = "error_pairing"
         except WEBOSTV_EXCEPTIONS:
             errors["base"] = "cannot_connect"
 
         option_sources = self.config_entry.options.get(CONF_SOURCES, [])
-        sources = [s for s in option_sources if s in sources_list]
+        sources = [s for s in option_sources if s in sources_map]
         if not sources:
-            sources = sources_list
+            sources = list(sources_map)
 
         options_schema = vol.Schema(
             {
                 vol.Optional(
                     CONF_SOURCES,
                     description={"suggested_value": sources},
-                ): cv.multi_select({source: source for source in sources_list}),
+                ): cv.multi_select(sources_map),
             }
         )
 

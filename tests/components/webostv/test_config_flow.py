@@ -124,11 +124,11 @@ async def test_options_flow_live_tv_in_apps(
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={CONF_SOURCES: ["Live TV", "Input01", "Input02"]},
+        user_input={CONF_SOURCES: [LIVE_TV_APP_ID, "app0", "app1"]},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_SOURCES] == ["Live TV", "Input01", "Input02"]
+    assert result["data"][CONF_SOURCES] == [LIVE_TV_APP_ID, "app0", "app1"]
 
 
 @pytest.mark.parametrize(
@@ -163,11 +163,11 @@ async def test_options_flow_errors(
 
     result3 = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={CONF_SOURCES: ["Input01", "Input02"]},
+        user_input={CONF_SOURCES: ["app0", "app1"]},
     )
 
     assert result3["type"] is FlowResultType.CREATE_ENTRY
-    assert result3["data"][CONF_SOURCES] == ["Input01", "Input02"]
+    assert result3["data"][CONF_SOURCES] == ["app0", "app1"]
 
 
 async def test_form_cannot_connect(hass: HomeAssistant, client) -> None:

@@ -63,6 +63,33 @@ async def test_update_options(hass: HomeAssistant, client) -> None:
     assert sources == ["Input02", "Live TV"]
 
 
+async def test_source_filtered_by_id_survives_rename(
+    hass: HomeAssistant, client
+) -> None:
+    """Test a source selected by its stable id is kept after being renamed on the TV."""
+    config_entry = await setup_webostv(hass)
+
+    new_options = config_entry.options.copy()
+    new_options[CONF_SOURCES] = ["app0"]
+    hass.config_entries.async_update_entry(config_entry, options=new_options)
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
+    assert sources == ["Input01", "Live TV"]
+
+    # rename the input on the TV
+    client.tv_state.inputs = {
+        **client.tv_state.inputs,
+        "in1": {**client.tv_state.inputs["in1"], "label": "AVR"},
+    }
+    await client.mock_state_update()
+    await hass.async_block_till_done()
+
+    sources = hass.states.get(ENTITY_ID).attributes[ATTR_INPUT_SOURCE_LIST]
+    assert sources == ["AVR", "Live TV"]
+
+
 async def test_disconnect_on_stop(hass: HomeAssistant, client) -> None:
     """Test we disconnect the client and clear callbacks when Home Assistants stops."""
     config_entry = await setup_webostv(hass)

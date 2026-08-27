@@ -226,6 +226,7 @@ class LgWebOSMediaPlayerEntity(WebOsTvEntity, RestoreEntity, MediaPlayerEntity):
                 self._source_list[source["label"]] = source
             elif (
                 not conf_sources
+                or source["appId"] in conf_sources
                 or source["label"] in conf_sources
                 or any(source["label"].find(word) != -1 for word in conf_sources)
             ):

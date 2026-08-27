@@ -48,22 +48,21 @@ def async_get_device_id_from_entity_id(hass: HomeAssistant, entity_id: str) -> s
     return entity_entry.device_id
 
 
-def get_sources(tv_state: WebOsTvState) -> list[str]:
-    """Construct sources list."""
-    sources = []
+def get_sources(tv_state: WebOsTvState) -> dict[str, str]:
+    """Construct mapping of stable source id to its current display label."""
+    sources: dict[str, str] = {}
     found_live_tv = False
     for app in tv_state.apps.values():
-        sources.append(app["title"])
+        sources[app["id"]] = app["title"]
         if app["id"] == LIVE_TV_APP_ID:
             found_live_tv = True
 
     for source in tv_state.inputs.values():
-        sources.append(source["label"])
+        sources[source["appId"]] = source["label"]
         if source["appId"] == LIVE_TV_APP_ID:
             found_live_tv = True
 
     if not found_live_tv:
-        sources.append("Live TV")
+        sources[LIVE_TV_APP_ID] = "Live TV"
 
-    # Preserve order when filtering duplicates
-    return list(dict.fromkeys(sources))
+    return sources
