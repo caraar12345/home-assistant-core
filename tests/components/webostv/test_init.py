@@ -147,13 +147,14 @@ async def test_app_shadowed_by_input_not_duplicated(
     hass.config_entries.async_update_entry(config_entry, options=new_options)
 
     # real webOS TVs list HDMI-style inputs both as an app launch point and as
-    # an input, sharing the same id; the input's (renameable) label should win
+    # an input sharing the same appId, under an unrelated input dict key/id;
+    # the input's (renameable) label should win
     client.tv_state.apps = {
         **client.tv_state.apps,
         "app0": {"title": "HDMI1", "id": "app0"},
     }
     client.tv_state.inputs = {
-        "app0": {"label": "Input01", "id": "app0", "appId": "app0"}
+        "HDMI_1": {"label": "Input01", "id": "HDMI_1", "appId": "app0"}
     }
     await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
