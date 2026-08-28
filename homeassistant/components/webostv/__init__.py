@@ -18,6 +18,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import WebOsTvConfigEntry, WebOsTvDataUpdateCoordinator
+from .helpers import async_migrate_sources_option
 from .services import async_setup_services
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -38,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WebOsTvConfigEntry) -> b
     client = WebOsClient(host, key, client_session=async_get_clientsession(hass))
     entry.runtime_data = coordinator = WebOsTvDataUpdateCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
+    async_migrate_sources_option(hass, entry, client.tv_state)
     await client.register_state_update_callback(coordinator.async_handle_update)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

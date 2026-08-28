@@ -1,5 +1,7 @@
 """Test the LG webOS TV config flow."""
 
+from unittest.mock import MagicMock
+
 from aiowebostv import WebOsTvPairError
 import pytest
 
@@ -30,6 +32,8 @@ from .const import (
     TV_MODEL,
     TV_NAME,
 )
+
+from tests.common import get_schema_suggested_value
 
 pytestmark = pytest.mark.usefixtures("mock_setup_entry")
 
@@ -124,11 +128,30 @@ async def test_options_flow_live_tv_in_apps(
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={CONF_SOURCES: ["Live TV", "Input01", "Input02"]},
+        user_input={CONF_SOURCES: [LIVE_TV_APP_ID, "app0", "app1"]},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_SOURCES] == ["Live TV", "Input01", "Input02"]
+    assert result["data"][CONF_SOURCES] == [LIVE_TV_APP_ID, "app0", "app1"]
+
+
+async def test_options_flow_preselects_legacy_label_selection(
+    hass: HomeAssistant, client: MagicMock
+) -> None:
+    """Test a source configured by its legacy label is still preselected."""
+    entry = await setup_webostv(hass)
+
+    # simulate an option saved before sources were matched by id, without a
+    # setup-time migration having run yet (e.g. the entry hasn't reloaded)
+    new_options = {**entry.options, CONF_SOURCES: ["Input01"]}
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.FORM
+    schema = result["data_schema"].schema
+    assert get_schema_suggested_value(schema, CONF_SOURCES) == ["app0"]
 
 
 @pytest.mark.parametrize(
@@ -163,11 +186,11 @@ async def test_options_flow_errors(
 
     result3 = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={CONF_SOURCES: ["Input01", "Input02"]},
+        user_input={CONF_SOURCES: ["app0", "app1"]},
     )
 
     assert result3["type"] is FlowResultType.CREATE_ENTRY
-    assert result3["data"][CONF_SOURCES] == ["Input01", "Input02"]
+    assert result3["data"][CONF_SOURCES] == ["app0", "app1"]
 
 
 async def test_form_cannot_connect(hass: HomeAssistant, client) -> None:

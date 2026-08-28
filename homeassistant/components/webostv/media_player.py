@@ -203,10 +203,15 @@ class LgWebOSMediaPlayerEntity(WebOsTvEntity, RestoreEntity, MediaPlayerEntity):
         self._source_list = {}
         conf_sources = self._sources
 
+        input_app_ids = {source["appId"] for source in tv_state.inputs.values()}
+
         found_live_tv = False
         for app in tv_state.apps.values():
             if app["id"] == LIVE_TV_APP_ID:
                 found_live_tv = True
+            if app["id"] in input_app_ids:
+                # handled below using the input's renameable label instead
+                continue
             if app["id"] == tv_state.current_app_id:
                 self._current_source = app["title"]
                 self._source_list[app["title"]] = app
@@ -226,6 +231,7 @@ class LgWebOSMediaPlayerEntity(WebOsTvEntity, RestoreEntity, MediaPlayerEntity):
                 self._source_list[source["label"]] = source
             elif (
                 not conf_sources
+                or source["appId"] in conf_sources
                 or source["label"] in conf_sources
                 or any(source["label"].find(word) != -1 for word in conf_sources)
             ):
