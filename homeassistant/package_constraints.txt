@@ -120,7 +120,7 @@ uuid==1000000000.0.0
 # httpx2 requires httpcore2 and anyio, while httpcore2 requires h11. The
 # version constraints on anyio and h11 are quite loose. Pin them so we can
 # directly link HA versions to these library versions.
-anyio==4.15.1
+anyio==4.16.0
 h11==0.16.0
 
 # Many libraries still depend on httpx/httpcore. Those imports are aliased to
@@ -281,7 +281,7 @@ srptools<2
 azure-kusto-data==4.5.1
 azure-kusto-ingest==4.5.1
 coloredlogs==15.0.1
-setuptools==84.0.0
+setuptools==84.1.0
 
 # Pin cffi to 2.0.0 to avoid version mismatch with the pre-baked _cffi_backend in the base image.
 # https://github.com/home-assistant/core/issues/175832
