@@ -110,6 +110,26 @@ async def test_user_flow_errors(
 
 
 @pytest.mark.usefixtures("mock_polly_client", "mock_setup_entry")
+async def test_user_flow_invalid_region(hass: HomeAssistant) -> None:
+    """Test a typed region Polly doesn't support is rejected and recovers."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], ENTRY_DATA | {CONF_REGION: "mars-north-1"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_REGION: "invalid_region"}
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], ENTRY_DATA
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.usefixtures("mock_polly_client", "mock_setup_entry")
 async def test_user_flow_already_configured(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> None:

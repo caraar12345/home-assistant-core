@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.generated.amazon_polly import (
     SUPPORTED_ENGINES,
     SUPPORTED_REGIONS,
@@ -79,9 +79,18 @@ CREDENTIALS_SCHEMA = probatio.Schema(
 
 USER_SCHEMA = probatio.Schema(
     {
+        # custom_value makes the frontend render a searchable picker.
         probatio.Required(CONF_REGION, default=DEFAULT_REGION): SelectSelector(
             SelectSelectorConfig(
-                options=sorted(SUPPORTED_REGIONS), mode=SelectSelectorMode.DROPDOWN
+                options=sorted(
+                    (
+                        SelectOptionDict(value=region, label=f"{name} – {region}")
+                        for region, name in SUPPORTED_REGIONS.items()
+                    ),
+                    key=lambda option: option["label"],
+                ),
+                custom_value=True,
+                sort=False,
             )
         ),
     }
@@ -92,10 +101,15 @@ def _title(region: str) -> str:
     return f"Amazon Polly ({region})"
 
 
-async def _async_validate(user_input: Mapping[str, Any]) -> dict[str, str]:
-    """Check the credentials work, returning form errors."""
+async def _async_validate(
+    hass: HomeAssistant, user_input: Mapping[str, Any]
+) -> dict[str, str]:
+    """Check the region and credentials, returning form errors."""
+    if user_input[CONF_REGION] not in SUPPORTED_REGIONS:
+        return {CONF_REGION: "invalid_region"}
     try:
         data = await async_connect(
+            hass,
             region=user_input[CONF_REGION],
             access_key_id=user_input[CONF_ACCESS_KEY_ID],
             secret_access_key=user_input[CONF_SECRET_ACCESS_KEY],
@@ -125,7 +139,7 @@ class AmazonPollyConfigFlow(ConfigFlow, domain=DOMAIN):
                 unique_id_for(user_input[CONF_ACCESS_KEY_ID], user_input[CONF_REGION])
             )
             self._abort_if_unique_id_configured()
-            if not (errors := await _async_validate(user_input)):
+            if not (errors := await _async_validate(self.hass, user_input)):
                 return self.async_create_entry(
                     title=_title(user_input[CONF_REGION]), data=user_input
                 )
@@ -142,7 +156,7 @@ class AmazonPollyConfigFlow(ConfigFlow, domain=DOMAIN):
             unique_id_for(import_data[CONF_ACCESS_KEY_ID], import_data[CONF_REGION])
         )
         self._abort_if_unique_id_configured()
-        if errors := await _async_validate(import_data):
+        if errors := await _async_validate(self.hass, import_data):
             return self.async_abort(reason=errors["base"])
         return self.async_create_entry(
             title=_title(import_data[CONF_REGION]),
@@ -221,7 +235,7 @@ class AmazonPollyConfigFlow(ConfigFlow, domain=DOMAIN):
         if unique_id != entry.unique_id:
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
-        if new_errors := await _async_validate(user_input):
+        if new_errors := await _async_validate(self.hass, user_input):
             errors.update(new_errors)
             return None
         return self.async_update_reload_and_abort(

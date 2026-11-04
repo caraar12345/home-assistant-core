@@ -68,6 +68,9 @@ PARALLEL_UPDATES = 0
 
 BREAKS_IN_HA_VERSION: Final = "2027.6.0"
 
+# Engine used when a voice doesn't support the configured default.
+ENGINE_PREFERENCE: Final = ("neural", "generative", "long-form", "standard")
+
 # Language of the default voice, used when it is not offered in the region.
 DEFAULT_LANGUAGE: Final = "en-US"
 
@@ -130,6 +133,7 @@ async def async_get_engine(
 
     try:
         data = await async_connect(
+            hass,
             region=config[CONF_REGION],
             access_key_id=config.get(CONF_ACCESS_KEY_ID),
             secret_access_key=config.get(CONF_SECRET_ACCESS_KEY),
@@ -217,10 +221,7 @@ class AmazonPollyBase:
     @property
     def default_options(self) -> dict[str, str]:
         """Return the default options."""
-        return {
-            TextToSpeechCommonOption.VOICE: self._default_voice,
-            AmazonPollyTextToSpeechOption.ENGINE: self._default_engine,
-        }
+        return {TextToSpeechCommonOption.VOICE: self._default_voice}
 
     @property
     def supported_options(self) -> list[str]:
@@ -237,6 +238,16 @@ class AmazonPollyBase:
                 if voice.get("LanguageCode") == language
             ),
             key=lambda voice: voice.name,
+        )
+
+    def _engine_for(self, voice_id: str) -> str:
+        """Return the default engine, or the best one the voice supports."""
+        supported = self._data.voices[voice_id].get("SupportedEngines", [])
+        if self._default_engine in supported:
+            return self._default_engine
+        return next(
+            (engine for engine in ENGINE_PREFERENCE if engine in supported),
+            self._default_engine,
         )
 
     async def async_get_tts_audio(
@@ -256,7 +267,9 @@ class AmazonPollyBase:
                 translation_key="language_not_supported",
                 translation_placeholders={"voice": voice_id, "language": language},
             )
-        engine = options.get(AmazonPollyTextToSpeechOption.ENGINE, self._default_engine)
+        engine = options.get(AmazonPollyTextToSpeechOption.ENGINE) or self._engine_for(
+            voice_id
+        )
         if voice_id not in self._data.engines.get(engine, set()):
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

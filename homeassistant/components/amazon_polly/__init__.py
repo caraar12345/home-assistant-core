@@ -14,6 +14,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AmazonPollyConfigEntry) 
     """Set up Amazon Polly from a config entry."""
     try:
         entry.runtime_data = await async_connect(
+            hass,
             region=entry.data[CONF_REGION],
             access_key_id=entry.data[CONF_ACCESS_KEY_ID],
             secret_access_key=entry.data[CONF_SECRET_ACCESS_KEY],

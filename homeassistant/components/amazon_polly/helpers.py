@@ -10,6 +10,7 @@ from aiobotocore.session import AioSession
 from botocore.exceptions import BotoCoreError, ClientError
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from .const import (
     AWS_CONF_CONNECT_TIMEOUT,
@@ -53,7 +54,15 @@ def unique_id_for(access_key_id: str, region: str) -> str:
     return f"{access_key_id}_{region}"
 
 
+def _create_session(profile: str | None) -> AioSession:
+    """Create a session with its AWS config files already read."""
+    session = AioSession(profile=profile)
+    session.get_scoped_config()
+    return session
+
+
 async def async_connect(
+    hass: HomeAssistant,
     *,
     region: str,
     access_key_id: str | None,
@@ -64,7 +73,7 @@ async def async_connect(
 
     The caller owns the returned client and must close it.
     """
-    session = AioSession(profile=profile)
+    session = await hass.async_add_executor_job(_create_session, profile)
     # pylint: disable-next=unnecessary-dunder-call
     client: AioBaseClient = await session.create_client(
         "polly",

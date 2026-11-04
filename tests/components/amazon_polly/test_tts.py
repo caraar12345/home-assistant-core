@@ -90,6 +90,11 @@ async def test_entity(
             {"VoiceId": "Amy", "Engine": "neural"},
             id="options",
         ),
+        pytest.param(
+            {tts.ATTR_OPTIONS: {"voice": "Danielle"}},
+            {"VoiceId": "Danielle", "Engine": "neural"},
+            id="voice_without_default_engine",
+        ),
     ],
 )
 async def test_tts_speak(
